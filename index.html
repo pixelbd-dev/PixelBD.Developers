@@ -101,69 +101,95 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const storage = getStorage(app);
 
-const pendingRef = ref(db,'pending');
-const donateRef = ref(db,'donations');
+// References
+const pendingRef = ref(db, 'pending');
+const donateRef = ref(db, 'donations');
 
-// ✅ Leaderboard display
-onValue(donateRef,snap=>{
- const data=snap.val()||{};
- const arr=Object.values(data).sort((a,b)=>b.amount-a.amount).slice(0,10); // Top 10
- let html='',total=0;
- arr.forEach((d,i)=>{total+=d.amount;html+=`<tr><td>${i+1}</td><td>${d.name}</td><td>${d.amount}</td></tr>`});
- leader.innerHTML=html;
- total.innerText=total;
-});
+// ------------------ Leaderboard (Real-Time) ------------------
+function updateLeaderboard(snapshot) {
+ const data = snapshot.val() || {};
+ const arr = Object.values(data).sort((a, b) => b.amount - a.amount).slice(0, 10); // Top 10
+ let html = '', total = 0;
+ arr.forEach((d, i) => {
+   total += d.amount;
+   html += `<tr><td>${i+1}</td><td>${d.name}</td><td>${d.amount}</td></tr>`;
+ });
+ leader.innerHTML = html;
+ total.innerText = total;
+}
 
-// ✅ Submit donation
-window.submitDonation=async()=>{
- const file=uprofile.files[0];
- if(!file){alert('Please select a proof file.'); return;}
- if(!['image/png','image/jpeg'].includes(file.type)){alert('Only PNG or JPG allowed.'); return;}
- if(file.size>2*1024*1024){alert('Max 2MB file size allowed.'); return;}
+// Initial listener for donations
+onValue(donateRef, updateLeaderboard);
 
- const storeRef=sRef(storage,'proofs/'+Date.now()+file.name);
- await uploadBytes(storeRef,file);
- const url=await getDownloadURL(storeRef);
- push(pendingRef,{name:uname.value,amount:+uamount.value,proof:url});
- umsg.innerText='Donation submitted. Admin approval pending.';
- uname.value=''; uamount.value=''; uprofile.value='';
+// ------------------ Submit Donation ------------------
+window.submitDonation = async () => {
+ const name = uname.value.trim();
+ const amount = parseFloat(uamount.value);
+ const file = uprofile.files[0];
+
+ if (!name) { alert('Please enter your name.'); return; }
+ if (!amount || amount <= 0) { alert('Please enter a valid amount.'); return; }
+ if (!file) { alert('Please select a proof file.'); return; }
+ if (!['image/png','image/jpeg'].includes(file.type)) { alert('Only PNG or JPG allowed.'); return; }
+ if (file.size > 2*1024*1024) { alert('Max file size 2MB.'); return; }
+
+ try {
+   const timestamp = Date.now();
+   const fileRef = sRef(storage, `proofs/${timestamp}-${file.name}`);
+   await uploadBytes(fileRef, file);
+   const url = await getDownloadURL(fileRef);
+
+   await push(pendingRef, { name, amount, proof: url });
+
+   umsg.innerText = 'Donation submitted successfully. Admin approval pending. ✅';
+   uname.value = '';
+   uamount.value = '';
+   uprofile.value = '';
+ } catch (err) {
+   console.error('Donation submission error:', err);
+   alert('Failed to submit donation. Check console for errors.');
+ }
 };
 
-// ✅ Admin login
-window.adminLogin=()=>{
- if(apass.value==='PIXELBD_ENTERPRISE'){ // ⚠️ Move to secure auth later
+// ------------------ Admin Login ------------------
+window.adminLogin = () => {
+ if (apass.value === 'PIXELBD_ENTERPRISE') {
    adminPanel.classList.remove('hidden');
  } else alert('Wrong Password!');
 };
 
-// ✅ Pending donations display
-onValue(pendingRef,snap=>{
- const data=snap.val()||{};
- let html='';
- Object.entries(data).forEach(([id,d])=>{
-   html+=`<tr>
+// ------------------ Pending Donations Table ------------------
+function updatePending(snapshot) {
+ const data = snapshot.val() || {};
+ let html = '';
+ Object.entries(data).forEach(([id, d]) => {
+   const safeName = encodeURIComponent(d.name);
+   html += `<tr>
      <td>${d.name}</td>
      <td>${d.amount}</td>
      <td><a href="${d.proof}" target="_blank">View</a></td>
      <td>
-       <button onclick="approve('${id}',${d.amount},'${d.name}')">Approve</button>
+       <button onclick="approve('${id}',${d.amount},'${safeName}')">Approve</button>
        <button onclick="reject('${id}')">Reject</button>
      </td>
    </tr>`;
  });
- pending.innerHTML=html;
-});
+ pending.innerHTML = html;
+}
 
-// ✅ Approve donation
-window.approve=(id,amount,name)=>{
- push(donateRef,{name,amount});
- remove(ref(db,'pending/'+id));
+// Initial listener for pending donations
+onValue(pendingRef, updatePending);
+
+// ------------------ Approve Donation ------------------
+window.approve = (id, amount, nameEncoded) => {
+ const name = decodeURIComponent(nameEncoded);
+ push(donateRef, { name, amount }); // ✅ Automatically triggers leaderboard update
+ remove(ref(db, 'pending/' + id));     // Remove from pending
 };
 
-// ✅ Reject donation
-window.reject=(id)=>{
- remove(ref(db,'pending/'+id));
+// ------------------ Reject Donation ------------------
+window.reject = (id) => {
+ remove(ref(db, 'pending/' + id));
 };
 </script>
-</body>
-</html>
+
