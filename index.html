@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelBD Developers | Enterprise Donation Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--green:#006a4e;--red:#f42a41;--neon:#22ff9c}
+body{margin:0;font-family:'Noto Sans Bengali',sans-serif;background:#020617;color:#fff}
+header{padding:70px 20px;text-align:center;background:linear-gradient(135deg,var(--green),var(--red))}
+header h1{font-size:3rem}
+section{max-width:1200px;margin:auto;padding:40px 20px}
+.card{background:#020617dd;border-radius:20px;padding:25px;margin-bottom:30px;box-shadow:0 0 30px #000}
+h2{color:var(--neon)}
+a{color:#38bdf8;text-decoration:none}
+input,button{padding:10px;border-radius:10px;border:none;margin:5px}
+button{cursor:pointer;background:var(--neon);font-weight:bold;transition:0.2s; }
+button:hover{opacity:0.8;transform:scale(1.05);}
+.hidden{display:none}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px;border-bottom:1px solid #334155}
+th{color:var(--neon)}
+footer{text-align:center;padding:20px;background:#020617aa}
+</style>
+</head>
+<body>
+<header>
+<h1>🇧🇩 PixelBD Developers</h1>
+<p>Bangladesh Roblox Game Development Community</p>
+</header>
+
+<section>
+<div class="card">
+<h2>আমাদের সম্পর্কে</h2>
+<p>আমরা Roblox এ গেম বানাই বাংলাদেশের প্লেয়ারদের জন্য। আপনাদের সহযোগিতায় আমরা বাংলাদেশি Roblox কমিউনিটিকে বিশ্বমানের করতে চাই। ❤️</p>
+</div>
+
+<div class="card">
+<h2>Official Links</h2>
+<a href="https://youtube.com/@pixelbddevelopers?si=rsp9ovhmA047eP9N" target="_blank">📺 YouTube</a> | 
+<a href="https://discord.gg/KQkqYVmEA" target="_blank">💬 Discord</a>
+</div>
+
+<div class="card">
+<h2>ডোনেট করুন</h2>
+<p>bKash / Nagad / Upay / Rocket</p>
+<b>Number:</b> YOUR_NUMBER_HERE
+</div>
+
+<div class="card">
+<h2>User Donation Submit (Proof Required)</h2>
+<input id="uname" placeholder="Your Name" required>
+<input id="uamount" type="number" placeholder="Amount (BDT)" required>
+<input type="file" id="uprofile" required>
+<button onclick="submitDonation()">Submit Donation</button>
+<p id="umsg"></p>
+</div>
+
+<div class="card">
+<h2>Donation Leaderboard</h2>
+<table>
+<thead><tr><th>Rank</th><th>Name</th><th>Amount</th></tr></thead>
+<tbody id="leader"></tbody>
+</table>
+<p>Total Donation: <span id="total">0</span> BDT</p>
+</div>
+
+<div class="card">
+<h2>Admin Login</h2>
+<input id="apass" type="password" placeholder="Admin Password">
+<button onclick="adminLogin()">Login</button>
+</div>
+
+<div class="card hidden" id="adminPanel">
+<h2>Admin Panel (Approve / Reject)</h2>
+<table>
+<thead><tr><th>Name</th><th>Amount</th><th>Proof</th><th>Action</th></tr></thead>
+<tbody id="pending"></tbody>
+</table>
+</div>
+</section>
+
+<footer>© 2026 PixelBD Developers 🇧🇩 | Enterprise System</footer>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, push, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
+// 🔑 Replace these with your Firebase project details
+const firebaseConfig = {
+ apiKey: "YOUR_API_KEY",
+ authDomain: "YOUR_PROJECT.firebaseapp.com",
+ databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+ projectId: "YOUR_PROJECT",
+ storageBucket: "YOUR_PROJECT.appspot.com"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const storage = getStorage(app);
+
+const pendingRef = ref(db,'pending');
+const donateRef = ref(db,'donations');
+
+// ✅ Leaderboard display
+onValue(donateRef,snap=>{
+ const data=snap.val()||{};
+ const arr=Object.values(data).sort((a,b)=>b.amount-a.amount).slice(0,10); // Top 10
+ let html='',total=0;
+ arr.forEach((d,i)=>{total+=d.amount;html+=`<tr><td>${i+1}</td><td>${d.name}</td><td>${d.amount}</td></tr>`});
+ leader.innerHTML=html;
+ total.innerText=total;
+});
+
+// ✅ Submit donation
+window.submitDonation=async()=>{
+ const file=uprofile.files[0];
+ if(!file){alert('Please select a proof file.'); return;}
+ if(!['image/png','image/jpeg'].includes(file.type)){alert('Only PNG or JPG allowed.'); return;}
+ if(file.size>2*1024*1024){alert('Max 2MB file size allowed.'); return;}
+
+ const storeRef=sRef(storage,'proofs/'+Date.now()+file.name);
+ await uploadBytes(storeRef,file);
+ const url=await getDownloadURL(storeRef);
+ push(pendingRef,{name:uname.value,amount:+uamount.value,proof:url});
+ umsg.innerText='Donation submitted. Admin approval pending.';
+ uname.value=''; uamount.value=''; uprofile.value='';
+};
+
+// ✅ Admin login
+window.adminLogin=()=>{
+ if(apass.value==='PIXELBD_ENTERPRISE'){ // ⚠️ Move to secure auth later
+   adminPanel.classList.remove('hidden');
+ } else alert('Wrong Password!');
+};
+
+// ✅ Pending donations display
+onValue(pendingRef,snap=>{
+ const data=snap.val()||{};
+ let html='';
+ Object.entries(data).forEach(([id,d])=>{
+   html+=`<tr>
+     <td>${d.name}</td>
+     <td>${d.amount}</td>
+     <td><a href="${d.proof}" target="_blank">View</a></td>
+     <td>
+       <button onclick="approve('${id}',${d.amount},'${d.name}')">Approve</button>
+       <button onclick="reject('${id}')">Reject</button>
+     </td>
+   </tr>`;
+ });
+ pending.innerHTML=html;
+});
+
+// ✅ Approve donation
+window.approve=(id,amount,name)=>{
+ push(donateRef,{name,amount});
+ remove(ref(db,'pending/'+id));
+};
+
+// ✅ Reject donation
+window.reject=(id)=>{
+ remove(ref(db,'pending/'+id));
+};
+</script>
+</body>
+</html>
